@@ -34,6 +34,7 @@
   }
   input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .hidden { display: none; }
+  .estado { margin-top: 16px; padding: 10px 12px; border-radius: 8px; font-size: .9rem; background: #fef3c7; color: #78350f; border: 1px solid #fcd34d; }
   .consent { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
   .consent details { font-size: .875rem; color: var(--muted); margin-bottom: 12px; }
   .consent summary { cursor: pointer; font-weight: 600; color: var(--text); }
@@ -60,6 +61,7 @@
 
     <form id="form" name="asistencia" method="POST" data-netlify="true" netlify-honeypot="bot-field" novalidate>
       <input type="hidden" name="form-name" value="asistencia">
+      <input type="hidden" name="fecha_registro" id="fecha_registro">
       <p class="hidden"><label>No llenar: <input name="bot-field"></label></p>
       <div class="field">
         <label for="nombre">Nombre completo</label>
@@ -149,6 +151,7 @@
       <button type="submit">Registrar asistencia</button>
       <div class="ok" id="ok" role="status"></div>
     </form>
+    <div class="estado hidden" id="estado" role="status"></div>
   </div>
 
 </div>
@@ -206,27 +209,80 @@
     if (!$('autorizacion').checked) { $('err-autorizacion').textContent = 'Debes autorizar el tratamiento de datos para registrarte.'; valido = false; }
     if (!valido) return;
 
+    $('fecha_registro').value = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+    const datos = new URLSearchParams(new FormData(form)).toString();
+
     boton.disabled = true;
     boton.textContent = 'Enviando…';
-    try {
-      const datos = new URLSearchParams(new FormData(form));
-      const r = await fetch('/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: datos.toString(),
-      });
-      if (!r.ok) throw new Error(r.status);
-      form.reset();
-      datosEst.classList.add('hidden');
-      $('ok').textContent = '¡Asistencia registrada, ' + nombre + '! Gracias.';
-    } catch (err) {
-      $('ok').style.color = 'var(--error)';
-      $('ok').textContent = 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.';
-    } finally {
-      boton.disabled = false;
-      boton.textContent = 'Registrar asistencia';
+    let enviado = false;
+    if (navigator.onLine) {
+      try { enviado = await enviar(datos); } catch {}
     }
+    if (!enviado) agregarPendiente(datos);
+
+    form.reset();
+    datosEst.classList.add('hidden');
+    $('ok').textContent = enviado
+      ? '¡Asistencia registrada, ' + nombre + '! Gracias.'
+      : '¡Asistencia guardada, ' + nombre + '! Se enviará automáticamente cuando haya internet.';
+    boton.disabled = false;
+    boton.textContent = 'Registrar asistencia';
+    actualizarEstado();
   });
+
+  // ---- Envío y cola de registros sin conexión ----
+  const COLA = 'asistencia-pendientes';
+  function leerCola() { try { return JSON.parse(localStorage.getItem(COLA)) || []; } catch { return []; } }
+  function guardarCola(c) { try { localStorage.setItem(COLA, JSON.stringify(c)); } catch {} }
+  function agregarPendiente(datos) { const c = leerCola(); c.push(datos); guardarCola(c); }
+
+  async function enviar(datos) {
+    const r = await fetch('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: datos,
+    });
+    return r.ok;
+  }
+
+  let enviando = false;
+  async function enviarPendientes() {
+    if (enviando || !navigator.onLine) return;
+    enviando = true;
+    try {
+      let c = leerCola();
+      while (c.length) {
+        let ok = false;
+        try { ok = await enviar(c[0]); } catch {}
+        if (!ok) break;
+        c = leerCola(); c.shift(); guardarCola(c);
+      }
+    } finally {
+      enviando = false;
+      actualizarEstado();
+    }
+  }
+
+  function actualizarEstado() {
+    const n = leerCola().length;
+    const el = $('estado');
+    let msg = '';
+    if (!navigator.onLine) msg = 'Sin conexión a internet. Puedes seguir registrando asistentes; los registros se guardan en este dispositivo.';
+    if (n) msg += (msg ? ' ' : '') + n + (n === 1 ? ' registro pendiente' : ' registros pendientes') + ' por enviar' + (navigator.onLine ? '…' : ' cuando vuelva la conexión.');
+    el.textContent = msg;
+    el.classList.toggle('hidden', !msg);
+  }
+
+  window.addEventListener('online', () => { actualizarEstado(); enviarPendientes(); });
+  window.addEventListener('offline', actualizarEstado);
+  setInterval(enviarPendientes, 30000);
+  actualizarEstado();
+  enviarPendientes();
+
+  // Guardar la página para que abra sin internet
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
 </script>
 </body>
 </html>
