@@ -28,7 +28,7 @@
   .field { margin-bottom: 16px; }
   label, legend { display: block; font-weight: 600; margin-bottom: 6px; }
   fieldset { border: 0; padding: 0; margin: 0 0 16px; }
-  input[type=text], select {
+  input[type=text], input[type=email], select {
     width: 100%; padding: 10px 12px; font-size: 1rem; color: var(--text);
     background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
   }
@@ -65,6 +65,37 @@
         <div class="error" id="err-nombre"></div>
       </div>
 
+      <div class="field">
+        <label for="tipodoc">Tipo de documento</label>
+        <select id="tipodoc" name="tipodoc">
+          <option value="">Selecciona el tipo de documento</option>
+          <option value="CC">Cédula de ciudadanía (CC)</option>
+          <option value="TI">Tarjeta de identidad (TI)</option>
+          <option value="CE">Cédula de extranjería (CE)</option>
+          <option value="PA">Pasaporte (PA)</option>
+          <option value="PPT">Permiso por protección temporal (PPT)</option>
+        </select>
+        <div class="error" id="err-tipodoc"></div>
+      </div>
+
+      <div class="field">
+        <label for="documento">Número de documento</label>
+        <input type="text" id="documento" name="documento" inputmode="numeric" autocomplete="off">
+        <div class="error" id="err-documento"></div>
+      </div>
+
+      <div class="field">
+        <label for="correo">Correo electrónico</label>
+        <input type="email" id="correo" name="correo" autocomplete="email" placeholder="nombre@correo.com">
+        <div class="error" id="err-correo"></div>
+      </div>
+
+      <div class="field">
+        <label for="municipio">Municipio</label>
+        <input type="text" id="municipio" name="municipio" autocomplete="address-level2">
+        <div class="error" id="err-municipio"></div>
+      </div>
+
       <fieldset>
         <legend>¿Eres estudiante?</legend>
         <div class="radios">
@@ -98,7 +129,7 @@
     <h2>Asistentes registrados (<span id="total">0</span>)</h2>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nombre</th><th>Estudiante</th><th>Semestre</th><th>Carrera</th><th>Fecha</th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Documento</th><th>Correo</th><th>Municipio</th><th>Estudiante</th><th>Semestre</th><th>Carrera</th><th>Fecha</th></tr></thead>
         <tbody id="lista"></tbody>
       </table>
     </div>
@@ -136,7 +167,7 @@
     tbody.innerHTML = '';
     lista.forEach((r) => {
       const tr = document.createElement('tr');
-      [r.nombre, r.estudiante, r.semestre || '—', r.carrera || '—', r.fecha].forEach((v) => {
+      [r.nombre, (r.tipodoc || '') + ' ' + (r.documento || ''), r.correo || '—', r.municipio || '—', r.estudiante,r.semestre || '—', r.carrera || '—', r.fecha].forEach((v) => {
         const td = document.createElement('td');
         td.textContent = v;
         tr.appendChild(td);
@@ -155,10 +186,15 @@
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    ['nombre', 'estudiante', 'semestre', 'carrera'].forEach((f) => ($('err-' + f).textContent = ''));
+    ['nombre', 'tipodoc', 'documento', 'correo', 'municipio', 'estudiante', 'semestre', 'carrera']
+      .forEach((f) => ($('err-' + f).textContent = ''));
     $('ok').textContent = '';
 
     const nombre = $('nombre').value.trim();
+    const tipodoc = $('tipodoc').value;
+    const documento = $('documento').value.trim();
+    const correo = $('correo').value.trim();
+    const municipio = $('municipio').value.trim();
     const est = form.querySelector('input[name=estudiante]:checked');
     const esEstudiante = est && est.value === 'Sí';
     const semestre = $('semestre').value;
@@ -166,6 +202,12 @@
     let valido = true;
 
     if (!nombre) { $('err-nombre').textContent = 'Escribe tu nombre.'; valido = false; }
+    if (!tipodoc) { $('err-tipodoc').textContent = 'Selecciona el tipo de documento.'; valido = false; }
+    if (!documento) { $('err-documento').textContent = 'Escribe tu número de documento.'; valido = false; }
+    else if (!/^[A-Za-z0-9-]{4,20}$/.test(documento)) { $('err-documento').textContent = 'Número de documento no válido.'; valido = false; }
+    if (!correo) { $('err-correo').textContent = 'Escribe tu correo electrónico.'; valido = false; }
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) { $('err-correo').textContent = 'Correo electrónico no válido.'; valido = false; }
+    if (!municipio) { $('err-municipio').textContent = 'Escribe tu municipio.'; valido = false; }
     if (!est) { $('err-estudiante').textContent = 'Indica si eres estudiante.'; valido = false; }
     if (esEstudiante) {
       if (!semestre) { $('err-semestre').textContent = 'Selecciona tu semestre.'; valido = false; }
@@ -176,6 +218,10 @@
     const lista = cargar();
     lista.push({
       nombre,
+      tipodoc,
+      documento,
+      correo,
+      municipio,
       estudiante: est.value,
       semestre: esEstudiante ? semestre : '',
       carrera: esEstudiante ? carrera : '',
@@ -193,8 +239,8 @@
     const lista = cargar();
     if (!lista.length) return;
     const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
-    const filas = [['Nombre', 'Estudiante', 'Semestre', 'Carrera', 'Fecha']]
-      .concat(lista.map((r) => [r.nombre, r.estudiante, r.semestre, r.carrera, r.fecha]));
+    const filas = [['Nombre', 'Tipo de documento', 'Documento', 'Correo', 'Municipio', 'Estudiante', 'Semestre', 'Carrera', 'Fecha']]
+      .concat(lista.map((r) => [r.nombre, r.tipodoc || '', r.documento || '', r.correo || '', r.municipio || '', r.estudiante,r.semestre, r.carrera, r.fecha]));
     const csv = '﻿' + filas.map((f) => f.map(esc).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
