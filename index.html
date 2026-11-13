@@ -39,14 +39,8 @@
     border: 1px solid var(--accent); background: var(--accent); color: #fff;
   }
   button:hover { background: var(--accent-hover); }
-  button.secondary { background: transparent; color: var(--accent); }
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  button:disabled { opacity: .6; cursor: wait; }
   .ok { color: #16a34a; margin-top: 12px; font-weight: 600; min-height: 1.5em; }
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
-  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 600; }
-  .empty { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -55,7 +49,9 @@
     <h1>Formulario de Asistencia</h1>
     <p class="sub">Registra tu asistencia completando los siguientes datos.</p>
 
-    <form id="form" novalidate>
+    <form id="form" name="asistencia" method="POST" data-netlify="true" netlify-honeypot="bot-field" novalidate>
+      <input type="hidden" name="form-name" value="asistencia">
+      <p class="hidden"><label>No llenar: <input name="bot-field"></label></p>
       <div class="field">
         <label for="nombre">Nombre completo</label>
         <input type="text" id="nombre" name="nombre" autocomplete="name" required>
@@ -127,136 +123,76 @@
     </form>
   </div>
 
-  <div class="card">
-    <h2>Asistentes registrados (<span id="total">0</span>)</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Nombre</th><th>Documento</th><th>Correo</th><th>Municipio</th><th>Participación</th><th>Semestre</th><th>Carrera</th><th>Fecha</th></tr></thead>
-        <tbody id="lista"></tbody>
-      </table>
-    </div>
-    <p class="empty" id="vacio">Aún no hay registros.</p>
-    <div class="actions" style="margin-top:16px">
-      <button type="button" class="secondary" id="exportar">Descargar CSV</button>
-      <button type="button" class="secondary" id="limpiar">Borrar registros</button>
-    </div>
-  </div>
 </div>
 
 <script>
-  const KEY = 'asistencia-registros';
   const $ = (id) => document.getElementById(id);
   const form = $('form');
   const datosEst = $('datos-estudiante');
+  const boton = form.querySelector('button[type=submit]');
 
   // Opciones de semestre 1 a 12
   for (let i = 1; i <= 12; i++) {
     $('semestre').add(new Option(i + '.º semestre', i));
   }
 
-  function cargar() {
-    try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
-  }
-  function guardar(lista) {
-    try { localStorage.setItem(KEY, JSON.stringify(lista)); } catch {}
-  }
-
-  function render() {
-    const lista = cargar();
-    $('total').textContent = lista.length;
-    $('vacio').classList.toggle('hidden', lista.length > 0);
-    const tbody = $('lista');
-    tbody.innerHTML = '';
-    lista.forEach((r) => {
-      const tr = document.createElement('tr');
-      [r.nombre, (r.tipodoc || '') + ' ' + (r.documento || ''), r.correo || '—', r.municipio || '—', r.tipo || r.estudiante || '—', r.semestre || '—', r.carrera || '—', r.fecha].forEach((v) => {
-        const td = document.createElement('td');
-        td.textContent = v;
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-  }
-
   // Mostrar semestre y carrera solo para estudiantes
   $('tipo').addEventListener('change', () => {
-    datosEst.classList.toggle('hidden', $('tipo').value !== 'Estudiante');
+    const esEstudiante = $('tipo').value === 'Estudiante';
+    datosEst.classList.toggle('hidden', !esEstudiante);
+    if (!esEstudiante) { $('semestre').value = ''; $('carrera').value = ''; }
     $('err-tipo').textContent = '';
   });
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     ['nombre', 'tipodoc', 'documento', 'correo', 'municipio', 'tipo', 'semestre', 'carrera']
       .forEach((f) => ($('err-' + f).textContent = ''));
     $('ok').textContent = '';
+    $('ok').style.color = '';
 
     const nombre = $('nombre').value.trim();
-    const tipodoc = $('tipodoc').value;
     const documento = $('documento').value.trim();
     const correo = $('correo').value.trim();
-    const municipio = $('municipio').value.trim();
     const tipo = $('tipo').value;
     const esEstudiante = tipo === 'Estudiante';
-    const semestre = $('semestre').value;
-    const carrera = $('carrera').value.trim();
     let valido = true;
 
     if (!nombre) { $('err-nombre').textContent = 'Escribe tu nombre.'; valido = false; }
-    if (!tipodoc) { $('err-tipodoc').textContent = 'Selecciona el tipo de documento.'; valido = false; }
+    if (!$('tipodoc').value) { $('err-tipodoc').textContent = 'Selecciona el tipo de documento.'; valido = false; }
     if (!documento) { $('err-documento').textContent = 'Escribe tu número de documento.'; valido = false; }
     else if (!/^[A-Za-z0-9-]{4,20}$/.test(documento)) { $('err-documento').textContent = 'Número de documento no válido.'; valido = false; }
     if (!correo) { $('err-correo').textContent = 'Escribe tu correo electrónico.'; valido = false; }
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) { $('err-correo').textContent = 'Correo electrónico no válido.'; valido = false; }
-    if (!municipio) { $('err-municipio').textContent = 'Escribe tu municipio.'; valido = false; }
+    if (!$('municipio').value.trim()) { $('err-municipio').textContent = 'Escribe tu municipio.'; valido = false; }
     if (!tipo) { $('err-tipo').textContent = 'Selecciona tu tipo de participación.'; valido = false; }
     if (esEstudiante) {
-      if (!semestre) { $('err-semestre').textContent = 'Selecciona tu semestre.'; valido = false; }
-      if (!carrera) { $('err-carrera').textContent = 'Escribe el nombre de tu carrera.'; valido = false; }
+      if (!$('semestre').value) { $('err-semestre').textContent = 'Selecciona tu semestre.'; valido = false; }
+      if (!$('carrera').value.trim()) { $('err-carrera').textContent = 'Escribe el nombre de tu carrera.'; valido = false; }
     }
     if (!valido) return;
 
-    const lista = cargar();
-    lista.push({
-      nombre,
-      tipodoc,
-      documento,
-      correo,
-      municipio,
-      tipo,
-      semestre: esEstudiante ? semestre : '',
-      carrera: esEstudiante ? carrera : '',
-      fecha: new Date().toLocaleString('es'),
-    });
-    guardar(lista);
-    render();
-
-    form.reset();
-    datosEst.classList.add('hidden');
-    $('ok').textContent = '¡Asistencia registrada, ' + nombre + '!';
-  });
-
-  $('exportar').addEventListener('click', () => {
-    const lista = cargar();
-    if (!lista.length) return;
-    const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
-    const filas = [['Nombre', 'Tipo de documento', 'Documento', 'Correo', 'Municipio', 'Tipo de participación', 'Semestre', 'Carrera', 'Fecha']]
-      .concat(lista.map((r) => [r.nombre, r.tipodoc || '', r.documento || '', r.correo || '', r.municipio || '', r.tipo || r.estudiante || '', r.semestre, r.carrera, r.fecha]));
-    const csv = '﻿' + filas.map((f) => f.map(esc).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = 'asistencia.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-
-  $('limpiar').addEventListener('click', () => {
-    if (confirm('¿Seguro que deseas borrar todos los registros?')) {
-      guardar([]);
-      render();
+    boton.disabled = true;
+    boton.textContent = 'Enviando…';
+    try {
+      const datos = new URLSearchParams(new FormData(form));
+      const r = await fetch('/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: datos.toString(),
+      });
+      if (!r.ok) throw new Error(r.status);
+      form.reset();
+      datosEst.classList.add('hidden');
+      $('ok').textContent = '¡Asistencia registrada, ' + nombre + '! Gracias.';
+    } catch (err) {
+      $('ok').style.color = 'var(--error)';
+      $('ok').textContent = 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.';
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Registrar asistencia';
     }
   });
-
-  render();
 </script>
 </body>
 </html>
