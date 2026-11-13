@@ -26,15 +26,12 @@
   h2 { margin: 0 0 12px; font-size: 1.15rem; }
   p.sub { margin: 0 0 20px; color: var(--muted); }
   .field { margin-bottom: 16px; }
-  label, legend { display: block; font-weight: 600; margin-bottom: 6px; }
-  fieldset { border: 0; padding: 0; margin: 0 0 16px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
   input[type=text], input[type=email], select {
     width: 100%; padding: 10px 12px; font-size: 1rem; color: var(--text);
     background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
   }
   input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .radios { display: flex; gap: 20px; }
-  .radios label { font-weight: 400; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
   .hidden { display: none; }
   .error { color: var(--error); font-size: .875rem; margin-top: 4px; min-height: 1em; }
   button {
@@ -96,14 +93,19 @@
         <div class="error" id="err-municipio"></div>
       </div>
 
-      <fieldset>
-        <legend>¿Eres estudiante?</legend>
-        <div class="radios">
-          <label><input type="radio" name="estudiante" value="Sí"> Sí</label>
-          <label><input type="radio" name="estudiante" value="No"> No</label>
-        </div>
-        <div class="error" id="err-estudiante"></div>
-      </fieldset>
+      <div class="field">
+        <label for="tipo">Tipo de participación</label>
+        <select id="tipo" name="tipo">
+          <option value="">Selecciona tu tipo de participación</option>
+          <option>Expositor</option>
+          <option>Estudiante</option>
+          <option>Docente</option>
+          <option>Empresario</option>
+          <option>Directivo</option>
+          <option>Experto</option>
+        </select>
+        <div class="error" id="err-tipo"></div>
+      </div>
 
       <div id="datos-estudiante" class="hidden">
         <div class="field">
@@ -129,7 +131,7 @@
     <h2>Asistentes registrados (<span id="total">0</span>)</h2>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nombre</th><th>Documento</th><th>Correo</th><th>Municipio</th><th>Estudiante</th><th>Semestre</th><th>Carrera</th><th>Fecha</th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Documento</th><th>Correo</th><th>Municipio</th><th>Participación</th><th>Semestre</th><th>Carrera</th><th>Fecha</th></tr></thead>
         <tbody id="lista"></tbody>
       </table>
     </div>
@@ -167,7 +169,7 @@
     tbody.innerHTML = '';
     lista.forEach((r) => {
       const tr = document.createElement('tr');
-      [r.nombre, (r.tipodoc || '') + ' ' + (r.documento || ''), r.correo || '—', r.municipio || '—', r.estudiante,r.semestre || '—', r.carrera || '—', r.fecha].forEach((v) => {
+      [r.nombre, (r.tipodoc || '') + ' ' + (r.documento || ''), r.correo || '—', r.municipio || '—', r.tipo || r.estudiante || '—', r.semestre || '—', r.carrera || '—', r.fecha].forEach((v) => {
         const td = document.createElement('td');
         td.textContent = v;
         tr.appendChild(td);
@@ -176,17 +178,15 @@
     });
   }
 
-  // Mostrar u ocultar campos de estudiante
-  form.querySelectorAll('input[name=estudiante]').forEach((r) =>
-    r.addEventListener('change', () => {
-      datosEst.classList.toggle('hidden', r.value !== 'Sí' || !r.checked);
-      $('err-estudiante').textContent = '';
-    })
-  );
+  // Mostrar semestre y carrera solo para estudiantes
+  $('tipo').addEventListener('change', () => {
+    datosEst.classList.toggle('hidden', $('tipo').value !== 'Estudiante');
+    $('err-tipo').textContent = '';
+  });
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    ['nombre', 'tipodoc', 'documento', 'correo', 'municipio', 'estudiante', 'semestre', 'carrera']
+    ['nombre', 'tipodoc', 'documento', 'correo', 'municipio', 'tipo', 'semestre', 'carrera']
       .forEach((f) => ($('err-' + f).textContent = ''));
     $('ok').textContent = '';
 
@@ -195,8 +195,8 @@
     const documento = $('documento').value.trim();
     const correo = $('correo').value.trim();
     const municipio = $('municipio').value.trim();
-    const est = form.querySelector('input[name=estudiante]:checked');
-    const esEstudiante = est && est.value === 'Sí';
+    const tipo = $('tipo').value;
+    const esEstudiante = tipo === 'Estudiante';
     const semestre = $('semestre').value;
     const carrera = $('carrera').value.trim();
     let valido = true;
@@ -208,7 +208,7 @@
     if (!correo) { $('err-correo').textContent = 'Escribe tu correo electrónico.'; valido = false; }
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) { $('err-correo').textContent = 'Correo electrónico no válido.'; valido = false; }
     if (!municipio) { $('err-municipio').textContent = 'Escribe tu municipio.'; valido = false; }
-    if (!est) { $('err-estudiante').textContent = 'Indica si eres estudiante.'; valido = false; }
+    if (!tipo) { $('err-tipo').textContent = 'Selecciona tu tipo de participación.'; valido = false; }
     if (esEstudiante) {
       if (!semestre) { $('err-semestre').textContent = 'Selecciona tu semestre.'; valido = false; }
       if (!carrera) { $('err-carrera').textContent = 'Escribe el nombre de tu carrera.'; valido = false; }
@@ -222,7 +222,7 @@
       documento,
       correo,
       municipio,
-      estudiante: est.value,
+      tipo,
       semestre: esEstudiante ? semestre : '',
       carrera: esEstudiante ? carrera : '',
       fecha: new Date().toLocaleString('es'),
@@ -239,8 +239,8 @@
     const lista = cargar();
     if (!lista.length) return;
     const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
-    const filas = [['Nombre', 'Tipo de documento', 'Documento', 'Correo', 'Municipio', 'Estudiante', 'Semestre', 'Carrera', 'Fecha']]
-      .concat(lista.map((r) => [r.nombre, r.tipodoc || '', r.documento || '', r.correo || '', r.municipio || '', r.estudiante,r.semestre, r.carrera, r.fecha]));
+    const filas = [['Nombre', 'Tipo de documento', 'Documento', 'Correo', 'Municipio', 'Tipo de participación', 'Semestre', 'Carrera', 'Fecha']]
+      .concat(lista.map((r) => [r.nombre, r.tipodoc || '', r.documento || '', r.correo || '', r.municipio || '', r.tipo || r.estudiante || '', r.semestre, r.carrera, r.fecha]));
     const csv = '﻿' + filas.map((f) => f.map(esc).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
