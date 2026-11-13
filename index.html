@@ -164,11 +164,14 @@
     $('semestre').add(new Option(i + '.º semestre', i));
   }
 
-  // Mostrar semestre y carrera solo para estudiantes
+  // Tipos de participación que deben indicar semestre y carrera
+  const CON_CARRERA = ['Estudiante', 'Expositor'];
+
+  // Mostrar semestre y carrera solo para esos tipos
   $('autorizacion').addEventListener('change', () => ($('err-autorizacion').textContent = ''));
 
   $('tipo').addEventListener('change', () => {
-    const esEstudiante = $('tipo').value === 'Estudiante';
+    const esEstudiante = CON_CARRERA.includes($('tipo').value);
     datosEst.classList.toggle('hidden', !esEstudiante);
     if (!esEstudiante) { $('semestre').value = ''; $('carrera').value = ''; }
     $('err-tipo').textContent = '';
@@ -185,7 +188,7 @@
     const documento = $('documento').value.trim();
     const correo = $('correo').value.trim();
     const tipo = $('tipo').value;
-    const esEstudiante = tipo === 'Estudiante';
+    const esEstudiante = CON_CARRERA.includes(tipo);
     let valido = true;
 
     if (!nombre) { $('err-nombre').textContent = 'Escribe tu nombre.'; valido = false; }
