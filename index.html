@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formulario de Asistencia</title>
+<style>
+  :root {
+    --bg: #f4f6fb; --card: #ffffff; --text: #1f2937; --muted: #6b7280;
+    --border: #d1d5db; --accent: #2563eb; --accent-hover: #1d4ed8; --error: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111827; --card: #1f2937; --text: #f3f4f6; --muted: #9ca3af;
+      --border: #374151; --accent: #3b82f6; --accent-hover: #60a5fa; --error: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5;
+  }
+  .container { max-width: 560px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+  h1 { margin: 0 0 4px; font-size: 1.5rem; }
+  h2 { margin: 0 0 12px; font-size: 1.15rem; }
+  p.sub { margin: 0 0 20px; color: var(--muted); }
+  .field { margin-bottom: 16px; }
+  label, legend { display: block; font-weight: 600; margin-bottom: 6px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 16px; }
+  input[type=text], select {
+    width: 100%; padding: 10px 12px; font-size: 1rem; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .radios { display: flex; gap: 20px; }
+  .radios label { font-weight: 400; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+  .hidden { display: none; }
+  .error { color: var(--error); font-size: .875rem; margin-top: 4px; min-height: 1em; }
+  button {
+    padding: 10px 18px; font-size: 1rem; font-weight: 600; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  button:hover { background: var(--accent-hover); }
+  button.secondary { background: transparent; color: var(--accent); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ok { color: #16a34a; margin-top: 12px; font-weight: 600; min-height: 1.5em; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <h1>Formulario de Asistencia</h1>
+    <p class="sub">Registra tu asistencia completando los siguientes datos.</p>
+
+    <form id="form" novalidate>
+      <div class="field">
+        <label for="nombre">Nombre completo</label>
+        <input type="text" id="nombre" name="nombre" autocomplete="name" required>
+        <div class="error" id="err-nombre"></div>
+      </div>
+
+      <fieldset>
+        <legend>¿Eres estudiante?</legend>
+        <div class="radios">
+          <label><input type="radio" name="estudiante" value="Sí"> Sí</label>
+          <label><input type="radio" name="estudiante" value="No"> No</label>
+        </div>
+        <div class="error" id="err-estudiante"></div>
+      </fieldset>
+
+      <div id="datos-estudiante" class="hidden">
+        <div class="field">
+          <label for="semestre">Semestre</label>
+          <select id="semestre" name="semestre">
+            <option value="">Selecciona tu semestre</option>
+          </select>
+          <div class="error" id="err-semestre"></div>
+        </div>
+        <div class="field">
+          <label for="carrera">Nombre de la carrera</label>
+          <input type="text" id="carrera" name="carrera" placeholder="Ej. Ingeniería de Sistemas">
+          <div class="error" id="err-carrera"></div>
+        </div>
+      </div>
+
+      <button type="submit">Registrar asistencia</button>
+      <div class="ok" id="ok" role="status"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Asistentes registrados (<span id="total">0</span>)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>Estudiante</th><th>Semestre</th><th>Carrera</th><th>Fecha</th></tr></thead>
+        <tbody id="lista"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="vacio">Aún no hay registros.</p>
+    <div class="actions" style="margin-top:16px">
+      <button type="button" class="secondary" id="exportar">Descargar CSV</button>
+      <button type="button" class="secondary" id="limpiar">Borrar registros</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const KEY = 'asistencia-registros';
+  const $ = (id) => document.getElementById(id);
+  const form = $('form');
+  const datosEst = $('datos-estudiante');
+
+  // Opciones de semestre 1 a 12
+  for (let i = 1; i <= 12; i++) {
+    $('semestre').add(new Option(i + '.º semestre', i));
+  }
+
+  function cargar() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
+  }
+  function guardar(lista) {
+    try { localStorage.setItem(KEY, JSON.stringify(lista)); } catch {}
+  }
+
+  function render() {
+    const lista = cargar();
+    $('total').textContent = lista.length;
+    $('vacio').classList.toggle('hidden', lista.length > 0);
+    const tbody = $('lista');
+    tbody.innerHTML = '';
+    lista.forEach((r) => {
+      const tr = document.createElement('tr');
+      [r.nombre, r.estudiante, r.semestre || '—', r.carrera || '—', r.fecha].forEach((v) => {
+        const td = document.createElement('td');
+        td.textContent = v;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Mostrar u ocultar campos de estudiante
+  form.querySelectorAll('input[name=estudiante]').forEach((r) =>
+    r.addEventListener('change', () => {
+      datosEst.classList.toggle('hidden', r.value !== 'Sí' || !r.checked);
+      $('err-estudiante').textContent = '';
+    })
+  );
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    ['nombre', 'estudiante', 'semestre', 'carrera'].forEach((f) => ($('err-' + f).textContent = ''));
+    $('ok').textContent = '';
+
+    const nombre = $('nombre').value.trim();
+    const est = form.querySelector('input[name=estudiante]:checked');
+    const esEstudiante = est && est.value === 'Sí';
+    const semestre = $('semestre').value;
+    const carrera = $('carrera').value.trim();
+    let valido = true;
+
+    if (!nombre) { $('err-nombre').textContent = 'Escribe tu nombre.'; valido = false; }
+    if (!est) { $('err-estudiante').textContent = 'Indica si eres estudiante.'; valido = false; }
+    if (esEstudiante) {
+      if (!semestre) { $('err-semestre').textContent = 'Selecciona tu semestre.'; valido = false; }
+      if (!carrera) { $('err-carrera').textContent = 'Escribe el nombre de tu carrera.'; valido = false; }
+    }
+    if (!valido) return;
+
+    const lista = cargar();
+    lista.push({
+      nombre,
+      estudiante: est.value,
+      semestre: esEstudiante ? semestre : '',
+      carrera: esEstudiante ? carrera : '',
+      fecha: new Date().toLocaleString('es'),
+    });
+    guardar(lista);
+    render();
+
+    form.reset();
+    datosEst.classList.add('hidden');
+    $('ok').textContent = '¡Asistencia registrada, ' + nombre + '!';
+  });
+
+  $('exportar').addEventListener('click', () => {
+    const lista = cargar();
+    if (!lista.length) return;
+    const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+    const filas = [['Nombre', 'Estudiante', 'Semestre', 'Carrera', 'Fecha']]
+      .concat(lista.map((r) => [r.nombre, r.estudiante, r.semestre, r.carrera, r.fecha]));
+    const csv = '﻿' + filas.map((f) => f.map(esc).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'asistencia.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  $('limpiar').addEventListener('click', () => {
+    if (confirm('¿Seguro que deseas borrar todos los registros?')) {
+      guardar([]);
+      render();
+    }
+  });
+
+  render();
+</script>
+</body>
+</html>
